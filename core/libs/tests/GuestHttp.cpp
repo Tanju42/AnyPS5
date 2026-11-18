@@ -5,6 +5,7 @@
 #include "prx/libc/include/general/VabiMacros.hpp"
 #include <atomic>
 #include <chrono>
+#include <cerrno>
 #include <clocale>
 #include <cstddef>
 #include <cstdint>
@@ -561,8 +562,10 @@ int main() {
     }
 
     char escaped[64];
+    errno = 71;
     Require(sceHttpUriEscape(nullptr, &required, 0, "a b/~\xC3\xA9") == 0);
     Require(required == std::strlen("a%20b%2F~%C3%A9") + 1);
+    Require(errno == 71);
     Require(sceHttpUriEscape(escaped, nullptr, required - 1, "a b/~\xC3\xA9") == outOfMemory);
     Require(sceHttpUriEscape(escaped, nullptr, sizeof(escaped), "a b/~\xC3\xA9") == 0);
     Require(Equal(escaped, "a%20b%2F~%C3%A9"));
@@ -573,9 +576,14 @@ int main() {
     Require(std::memcmp(escaped, "hellZ", 5) == 0);
 
     Require(sceHttpUriEscape(reinterpret_cast<char*>(0x10), &required, 4, "hello world") == invalidValue);
+    required = 123;
     errno = 71;
-    Require(sceHttpUriEscape(reinterpret_cast<char*>(0x10), &required, sizeof(escaped), "a b") == invalidValue);
+    Require(sceHttpUriEscape(reinterpret_cast<char*>(0x10), &required, sizeof(escaped), "a b") == invalidValue && required == 6);
+    Require(errno == 71);
+    std::memset(escaped, 'Z', sizeof(escaped));
+    errno = 71;
     Require(sceHttpUriEscape(escaped, reinterpret_cast<std::size_t*>(0x10), sizeof(escaped), "a b") == invalidValue);
+    for (char byte : escaped) Require(byte == 'Z');
     Require(errno == 71);
     Require(sceHttpUriEscape(escaped, &required, sizeof(escaped), "a b") == 0 && Equal(escaped, "a%20b") && required == 6);
     const std::string previousCtype = std::setlocale(LC_CTYPE, nullptr);
